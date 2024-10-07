@@ -1,25 +1,28 @@
 {
-  "name": "stars-history",
+  "name": "commits-history",
   "version": "1.0.0",
   "type": "module",
-  "description": "A stunning star history chart generator for Github Repositories",
-  "main": "chart.js",
+  "description": "A chart generator for GitLab repositories showing commit history",
+  "main": "app.js",
   "scripts": {
-    "start": "node chart.js"
+    "start": "node app.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lucabubi/star-history.git"
+    "url": "https://gitlab.com/LukuLaMule/commits-history.git"
   },
   "keywords": [
-    "star-history"
+    "commits-history",
+    "gitlab",
+    "chart",
+    "visualization"
   ],
   "author": "lucabubi",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/lucabubi/star-history/issues"
+    "url": "https://gitlab.com/LukuLaMule/commits-history/issues"
   },
-  "homepage": "https://github.com/lucabubi/star-history#readme",
+  "homepage": "https://gitlab.com/LukuLaMule/commits-history#readme",
   "dependencies": {
     "axios": "^1.6.2",
     "canvas": "^2.11.2",

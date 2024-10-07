@@ -1,104 +1,96 @@
-// Strict Mode
+// Mode strict
 'use strict';
 
 // Imports
 import express, { json } from 'express';
-import helmet from "helmet";
+import helmet from 'helmet';
 import { registerFont, createCanvas } from 'canvas';
 import Chart from 'chart.js/auto';
 import axios from 'axios';
 import dayjs from 'dayjs';
-import * as emoji from 'node-emoji'
 import 'chartjs-adapter-dayjs-4/dist/chartjs-adapter-dayjs-4.esm.js';
 
-registerFont('./fonts/JetBrainsMono-Regular.ttf', { family: 'JetBrains Mono Regular' })
-registerFont('./fonts/JetBrainsMono-Bold.ttf', { family: 'JetBrains Mono Bold' })
+registerFont('./fonts/JetBrainsMono-Regular.ttf', { family: 'JetBrains Mono Regular' });
+registerFont('./fonts/JetBrainsMono-Bold.ttf', { family: 'JetBrains Mono Bold' });
 
-// Start express plus a security mesure
-const app = express().disable("x-powered-by");
+// Démarrer express avec une mesure de sécurité
+const app = express().disable('x-powered-by');
 app.use(json());
 app.use(helmet());
 
-// URL of the server we're creating
-const API_URL = `http://localhost:${process.env.PORT}`
+// URL du serveur que nous créons
+const API_URL = `http://localhost:${process.env.PORT || 3000}`;
 
-// Width of canvas in px (not considering padding added after!)
+// Largeur du canvas en pixels
 const WIDTH = 495;
 
-// Height of canvas in px (not considering padding added after!)
+// Hauteur du canvas en pixels
 const HEIGHT = 195;
 
-// Color Palette
+// Palette de couleurs
 const colorPalette = {
   red: {
     line: 'rgba(201, 25, 0, 1)',
     area: 'rgba(201, 25, 0, 0.25)',
     title: 'rgba(201, 25, 0, 0.80)',
-    xlabel: 'rgba(201, 25, 0, 0.80)'
+    xlabel: 'rgba(201, 25, 0, 0.80)',
   },
   orange: {
     line: 'rgba(255, 137, 0, 1)',
     area: 'rgba(255, 137, 0, 0.25)',
     title: 'rgba(255, 137, 0, 0.80)',
-    xlabel: 'rgba(255, 137, 0, 0.80)'
+    xlabel: 'rgba(255, 137, 0, 0.80)',
   },
   yellow: {
     line: 'rgba(255, 215, 0, 1)',
     area: 'rgba(255, 215, 0, 0.25)',
     title: 'rgba(255, 215, 0, 0.80)',
-    xlabel: 'rgba(255, 215, 0, 0.80)'
+    xlabel: 'rgba(255, 215, 0, 0.80)',
   },
   green: {
     line: 'rgba(32, 212, 32, 1)',
     area: 'rgba(32, 212, 32, 0.25)',
     title: 'rgba(32, 212, 32, 0.80)',
-    xlabel: 'rgba(32, 212, 32, 0.80)'
+    xlabel: 'rgba(32, 212, 32, 0.80)',
   },
   blue: {
     line: 'rgba(30, 78, 255, 1)',
     area: 'rgba(30, 78, 255, 0.25)',
     title: 'rgba(30, 78, 255, 0.80)',
-    xlabel: 'rgba(30, 78, 255, 0.80)'
+    xlabel: 'rgba(30, 78, 255, 0.80)',
   },
   violet: {
     line: 'rgba(150, 0, 215, 1)',
     area: 'rgba(150, 0, 215, 0.25)',
     title: 'rgba(150, 0, 215, 0.80)',
-    xlabel: 'rgba(150, 0, 215, 0.80)'
+    xlabel: 'rgba(150, 0, 215, 0.80)',
   },
 };
 
-// Redirect HTTP to HTTPS (Made for Heroku Deployment) -- COMMENT THIS IF YOU'RE NOT USING HTTPS
-app.use((req, res, next) => {
-  if (req.header('x-forwarded-proto') !== 'https') {
-    res.redirect(`https://${req.hostname}${req.url}`);
-  } else {
-    next();
-  }
-});
-
-// Define the GET call to /chart
+// Définir l'appel GET à /chart
 app.get('/chart', async (req, res) => {
-
   // Logging
-  console.log("GET " + req.hostname + req.url);
+  console.log('GET ' + req.hostname + req.url);
 
-  // Get these parameters from the url
-  // Format (optional) -> localhost:3000/chart?username=username&repository=repository (&color=color)
+  // Obtenir les paramètres de l'URL
   const { username, repository, color } = req.query;
 
   if (!username || !repository) {
     return res.status(400).send('Username and repository are required');
   }
 
-  // Github API endpoint
-  const GITHUB_API_URL = `https://api.github.com/repos/${username}/${repository}`;
+  // Encodage du chemin du projet pour l'API GitLab
+  const projectPath = `${username}/${repository}`;
+  const encodedProjectPath = encodeURIComponent(projectPath);
+
+  // URL de l'API GitLab
+  const GITLAB_API_URL = `https://gitlab.com/api/v4/projects/${encodedProjectPath}`;
 
   try {
-    const chartImage = await createChartImage(GITHUB_API_URL, color);
+    const chartImage = await createChartImage(GITLAB_API_URL, color);
     res.header({
       'Content-Type': 'image/png',
-      'Cache-Control': 'public, max-age=86400'
+      'Cache-Control': 'public, max-age=86400',
     });
     res.send(Buffer.from(chartImage.split(',')[1], 'base64'));
   } catch (error) {
@@ -107,142 +99,108 @@ app.get('/chart', async (req, res) => {
   }
 });
 
-// Main function to create the Chart using Chartjs
-const createChartImage = async (GITHUB_API_URL, color = "violet") => {
+// Fonction principale pour créer le graphique avec Chart.js
+const createChartImage = async (GITLAB_API_URL, color = 'violet') => {
+  // Obtenir les informations du projet
+  const repoInfoResponse = await axios.get(GITLAB_API_URL);
+  const repoInfo = repoInfoResponse.data;
 
-  // Fetch Repository info
-  const repoInfo = await axios.get(GITHUB_API_URL);
-
-  // Check if the repository exists
-  if (repoInfo.status !== 200) {
-    throw new Error(`Unable to fetch repository information. Status code: ${repoInfo.status}`);
+  // Vérifier si le projet existe
+  if (!repoInfo) {
+    throw new Error('Unable to fetch repository information.');
   }
 
-  const totalStars = repoInfo.data.stargazers_count;
-  const url = `${GITHUB_API_URL}/stargazers?per_page=100`;
-  const pageCount = Math.ceil(totalStars / 100);
+  // Obtenir l'historique des commits
+  const commits = await getCommitsHistory(GITLAB_API_URL);
 
-  // Fetch user-starred history
-  const starsHistory = await getStarsHistory(url, pageCount);
-
-  // Map for storing dates and stars count
+  // Map pour stocker les dates et le nombre de commits
   const dateMap = new Map();
-  let cumulativeCount = 0;
 
-  // Sort by date
-  starsHistory.sort((a, b) => dayjs(a.starred_at).isBefore(dayjs(b.starred_at), "day"));
-
-  // Store dates and stars count
-  starsHistory.forEach(entry => {
-    const key = dayjs(entry.starred_at).format('YYYY-MM-DD').toString();
-    cumulativeCount += 1;
-    dateMap.set(key, cumulativeCount);
+  // Compter le nombre de commits par date
+  commits.forEach((commit) => {
+    const date = dayjs(commit.committed_date).format('YYYY-MM-DD');
+    if (dateMap.has(date)) {
+      dateMap.set(date, dateMap.get(date) + 1);
+    } else {
+      dateMap.set(date, 1);
+    }
   });
 
-  // X Chart axes
+  // Créer des tableaux pour les labels (dates) et les données (commits cumulés)
   const labels = [];
+  const cumulativeCommits = [];
+  let totalCommits = 0;
 
-  // Y Chart axes
-  const cumulativeStars = [];
+  // Trier les dates
+  const sortedDates = Array.from(dateMap.keys()).sort((a, b) => dayjs(a).diff(dayjs(b)));
 
-  // Fill X-axes and Y-axes
-  const dataArray = Array.from(dateMap.entries())
-  dataArray.forEach(([key, count]) => {
-    labels.push(key);
-    cumulativeStars.push(count);
+  sortedDates.forEach((date) => {
+    labels.push(date);
+    totalCommits += dateMap.get(date);
+    cumulativeCommits.push(totalCommits);
   });
 
-  // Comparing by day, if the repo has been created in a date before the day the first user starred it
-  if (dayjs(repoInfo.data.created_at).isBefore(dayjs(dataArray[0][0]).format("YYYY-MM-DD"), "day")) {
-
-    let date = dayjs(repoInfo.data.created_at);
-    const endDate = dayjs(dataArray[0][0]).format("YYYY-MM-DD");
-
-    while (date.isBefore(endDate)) {
-      // Then We show as first x-label the day of the creation of the repo and all the dates between repo creation date
-      // and the date in which the first user starred the repo
+  // S'assurer que les labels couvrent la période depuis la création du projet
+  if (dayjs(repoInfo.created_at).isBefore(dayjs(labels[0]), 'day')) {
+    let date = dayjs(repoInfo.created_at);
+    const endDate = dayjs(labels[0]);
+    while (date.isBefore(endDate, 'day')) {
       labels.unshift(date.format('YYYY-MM-DD'));
-      cumulativeStars.unshift(0);
+      cumulativeCommits.unshift(0);
       date = date.add(1, 'day');
     }
   }
 
-  // Comparing by day, if the repo has not been starred today
-  if (dayjs(dataArray[dataArray.length - 1][0]).isBefore(dayjs().format("YYYY-MM-DD"), "day")) {
-    // Then We add the last label with today-date
+  // Si le dernier commit n'est pas d'aujourd'hui, ajouter la date d'aujourd'hui
+  if (dayjs(labels[labels.length - 1]).isBefore(dayjs(), 'day')) {
     labels.push(dayjs().format('YYYY-MM-DD'));
-    // And as value we use the last amount of stars known
-    cumulativeStars.push(dataArray[dataArray.length - 1][1]);
+    cumulativeCommits.push(totalCommits);
   }
 
-  // In order to create rounded corner around the canvas and fill it with black
+  // Plugin pour arrondir les coins du canvas
   const colorArea = {
     id: 'colorArea',
     beforeDraw(chart) {
       const { ctx } = chart;
       ctx.save();
       ctx.beginPath();
-      ctx.roundRect(0, 0, 495, 195, 15);
+      ctx.roundRect(0, 0, WIDTH, HEIGHT, 15);
       ctx.fillStyle = 'black';
       ctx.fill();
-    }
-  }
+    },
+  };
 
-  // Count how many different months there are in the array provided
-  function countUniqueMonths(x) {
-    const months = x.map(value => dayjs(value).format('YYYY-MM'));
-    return new Set(months).size;
-  }
-
-  // Exact number of X labels to show
-  let uniqueMonths = countUniqueMonths(labels);
-  let xLabelsToShow = 6;
-  if (uniqueMonths <= 2) {
-    xLabelsToShow = 2;
-  } else if (uniqueMonths === 3) {
-    xLabelsToShow = 3;
-  } else if (uniqueMonths === 4) {
-    xLabelsToShow = 4;
-  } else if (uniqueMonths === 5) {
-    xLabelsToShow = 5;
-  }
-
-  // Maximum number of Y labels to show
-  let maxYLabelsToShow = 4;
-  if (cumulativeStars.length <= 2)
-    maxYLabelsToShow = 2;
-  else if (cumulativeStars.length === 3)
-    maxYLabelsToShow = 3;
-
-  // Chart configuration
+  // Configuration du graphique
   const configuration = {
     type: 'line',
     data: {
       labels: labels,
-      datasets: [{
-        data: cumulativeStars,
-        fill: true,
-        borderColor: colorPalette[color].line,
-        backgroundColor: colorPalette[color].area,
-        tension: 0.4,
-        borderWidth: 4,
-        pointRadius: 0
-      }]
+      datasets: [
+        {
+          data: cumulativeCommits,
+          fill: true,
+          borderColor: colorPalette[color].line,
+          backgroundColor: colorPalette[color].area,
+          tension: 0.4,
+          borderWidth: 4,
+          pointRadius: 0,
+        },
+      ],
     },
     options: {
       plugins: {
         legend: {
-          display: false
+          display: false,
         },
         title: {
           display: true,
-          text: "Star History - " + repoInfo.data.full_name,
+          text: 'Commit History - ' + repoInfo.path_with_namespace,
           color: colorPalette[color].title,
           font: {
             family: 'JetBrains Mono Bold',
             size: 16,
           },
-        }
+        },
       },
       scales: {
         x: {
@@ -252,94 +210,84 @@ const createChartImage = async (GITHUB_API_URL, color = "violet") => {
           },
           position: 'bottom',
           grid: {
-            display: false
+            display: false,
           },
           ticks: {
             autoSkip: true,
-            align: 'inner',
             color: colorPalette[color].xlabel,
             font: {
               family: 'JetBrains Mono Bold',
-              size: 24,
+              size: 12,
             },
-            callback: function (value, index, values) {
-              // Determine the step between each label
-              let step = Math.floor(values.length / (xLabelsToShow - 1));
-
-              // Always show the first and last label (last label will show a zap icon)
-              if (index === 0 || index === values.length - 1) {
-                let formattedDate = dayjs(value).format('MMM').charAt(0) + dayjs(value).format('YY');
-                return index === values.length - 1 ? emoji.get("zap") : formattedDate;
-              }
-
-              // For other labels, return null (do not show them) if they're not a multiple of the step size
-              else if (index % step !== 0 || index > values.length - 1 -step/2) {
-                return null;
-              }
-
-              // Calculate the formatted date only when necessary
-              let formattedDate = dayjs(value).format('MMM').charAt(0) + dayjs(value).format('YY');
-              return formattedDate;
-            }
-          }
+          },
         },
         y: {
           min: 0,
           grid: {
-            display: false
+            display: false,
           },
           ticks: {
             beginAtZero: true,
-            autoSkip: true,
-            maxTicksLimit: maxYLabelsToShow,
-            align: 'center',
             color: 'rgba(255, 255, 255, 0.95)',
             font: {
               family: 'JetBrains Mono Regular',
-              size: 18,
+              size: 12,
             },
-          }
-        }
+          },
+        },
       },
       layout: {
         padding: {
           left: 10,
           bottom: 2,
           right: 4,
-        }
-      }
+        },
+      },
     },
-    plugins: [colorArea]
+    plugins: [colorArea],
   };
 
-  // Create a canvas with the desidered dimensions
+  // Création du canvas
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext('2d');
 
-  // Draw the chart
+  // Dessiner le graphique
   new Chart(ctx, configuration);
 
-  // Convert canvas to data URL
+  // Convertir le canvas en data URL
   const dataUrl = canvas.toDataURL();
   return dataUrl;
 };
 
-// Recursive function to fetch stars history being aware of github pagination limits
-const getStarsHistory = async (url, pageCount, page = 1, starsHistory = []) => {
-  const headers = {
-    'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
-    'Accept': 'application/vnd.github.v3.star+json'
-  };
-  const response = await axios.get(`${url}&page=${page}`, { headers });
-  starsHistory = starsHistory.concat(response.data);
+// Fonction pour obtenir l'historique des commits
+const getCommitsHistory = async (GITLAB_API_URL) => {
+  const commits = [];
+  let page = 1;
+  const perPage = 100;
+  let hasMore = true;
 
-  if (page < pageCount) {
-    return getStarsHistory(url, pageCount, page + 1, starsHistory);
-  } else {
-    return starsHistory;
+  while (hasMore) {
+    const response = await axios.get(`${GITLAB_API_URL}/repository/commits`, {
+      params: {
+        per_page: perPage,
+        page: page,
+      },
+    });
+    const data = response.data;
+    commits.push(...data);
+    if (data.length < perPage) {
+      hasMore = false;
+    } else {
+      page += 1;
+    }
   }
+
+  // Les dates de commit sont dans data[i].committed_date
+  return commits.map((commit) => ({
+    committed_date: commit.committed_date,
+  }));
 };
 
-app.listen(process.env.PORT, () => {
+app.listen(process.env.PORT || 3000, () => {
   console.log(`Server is running at ${API_URL}/chart`);
 });
